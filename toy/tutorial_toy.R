@@ -10,7 +10,7 @@
 # =============================================================================
 
 # ── Source all modules ────────────────────────────────────────────────────────
-code_dir <- "../code"
+code_dir <- "./code"
 for (f in list.files(code_dir, pattern = "^0[0-9]_.*\\.R$", full.names = TRUE))
   source(f)
 
@@ -111,7 +111,7 @@ cat("\n╔════ STEP 5: Simulate one season with no intervention ══�
 sim_baseline <- simulate_network(
   g                = g,
   mix_matrix       = mix_matrix,
-  base_params      = base_params,
+  node_params      = node_params,
   strategy_fn      = make_strategy_none(),
   intervention_pHS = NA,
   nseasons         = 10,
@@ -138,7 +138,7 @@ k_nodes <- 3
 sim_intervention <- simulate_network(
   g                = g,
   mix_matrix       = mix_matrix,
-  base_params      = base_params,
+  node_params      = node_params,
   strategy_fn      = make_strategy_random(k_nodes),
   intervention_pHS = seed_pHSinit["certified"],
   nseasons         = 10,
@@ -187,7 +187,7 @@ for (s_name in names(strategies_test)) {
     simulate_network(
       g                = g,
       mix_matrix       = mix_matrix,
-      base_params      = base_params,
+      node_params      = node_params,
       strategy_fn      = strategies_test[[s_name]],
       intervention_pHS = if (is_baseline) NA else seed_pHSinit["certified"],
       nseasons         = 10,
