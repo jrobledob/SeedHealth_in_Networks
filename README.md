@@ -1,138 +1,144 @@
-# Seed Degeneration Network Epidemic — Pipeline v2
+# Seed Degeneration Network — Pipeline v3 (two networks, three figures)
 
-End-to-end pipeline for Objectives 2, 3, and 4 of the seed degeneration study.
-Objective 1 (network generation from ERGM/TERGM models) is handled separately;
-this pipeline consumes its outputs as `.rds` files.
+A focused pipeline that builds the **two real networks** (nonstress, stress)
+from the Peru Excel survey, runs the seed-health transmission model, and
+produces **three figures** as **PDF** and as an **editable PowerPoint**.
+
+This replaces the six-network / four-objective v2 workflow. The validated
+transmission engine (`compute_mix_matrix` / `run_node` / `simulate_network`)
+is carried over unchanged; everything else is new.
 
 ---
 
-## Directory Structure
+## Layout
 
 ```
-seed_network_v2/
-├── code/                       ← shared modules (do not edit during runs)
-│   ├── 01_network.R            Network loading (Excel + rds)
-│   ├── 02_params.R             Shared params + node-type pHS0 + seed-type pHS
-│   ├── 03_strategies.R         4 distribution strategies + baseline
-│   ├── 04_simulate.R           Core network epidemic simulation
-│   ├── 05_obj2_baseline.R      Objective 2 driver
-│   ├── 06_obj3_strategies.R    Objective 3 driver
-│   ├── 07_obj4_robustness.R    Objective 4 driver
-│   ├── 08_analysis.R           Heatmaps, trajectories, network plots
-│   └── 09_toy_networks.R       12-node toy network generator
-│
-├── toy/
-│   ├── tutorial_toy.R          10-step interactive tutorial
-│   └── tutorial_outputs/       PDFs produced by tutorial steps
-│
-└── real/
-    ├── pipeline_real.R         Full pipeline on real data
-    ├── Data/                   Excel files (TieData, NodeData)
-    ├── networks/               Objective 1 .rds files (when available)
-    └── real_outputs/           Results and figures
+seed_network_v3/
+├── code/
+│   ├── 01_network.R     Build Nonstress + Stress networks from Excel
+│   ├── 02_params.R      Region × node-type tables (Wa, Z, pHS0) + scenarios
+│   ├── 03_simulate.R    Transmission engine (v2, unchanged) + scenario runner
+│   ├── 04_figures.R     Figures 1–3 + PDF/PPTX savers
+│   └── 05_run_all.R     Driver (edit the CONFIG block at the top)
+├── Data/                Put the two Excel files here
+└── outputs/             PDFs, the .pptx, and sims_store.rds land here
 ```
 
----
+## Inputs (place in `Data/`)
 
-## What changed from v1
+```
+TieData_social_network.xlsx    sheets: nonstress_ties, stress_ties
+NodeData_social_network.xlsx   sheets: nonstress_nodes, stress_nodes
+```
 
-1. **Only `pHSinit` varies between seed types.** All other parameters (β, m, α, z, r, E, …) are now identical across CS / QDS / informal. The seed itself is the only variable.
+Expected columns — ties: `Source (from)`, `Sink (to)`, `Transaction_vol (kg)`;
+nodes: `Node_ID`, `Node_type`, `Node_region`, `Node_location`.
 
-2. **Per-node-type initial pHS₀.** At t=0 each node receives a baseline pHS based on its institutional type, ranging from Seed_specialist (0.80) down to Other (0.30). See `02_params.R::node_type_pHSinit`.
-
-3. **Six networks instead of one.** Objective 2 runs across all 6 networks from Objective 1 (real / scale-free / small-world × stress / nonstress).
-
-4. **Realistic-scenario selection.** After Objective 2, the 3 worst-case (informal) scenarios are selected automatically and feed into Objective 3.
-
-5. **Best-strategy selection per realistic scenario.** Objective 3 picks the best (network × seed_type) combination for each of the 4 strategies, giving 4 winning configurations for Objective 4.
-
-6. **Risk modifiers as percentiles.** Availability and acceptance now take values {0, 0.25, 0.50, 0.75, 1.00} per Objective 4 specification.
-
----
-
-## How to run
-
-### Option A — Toy tutorial (recommended first)
-
-Quickly validate everything on a 12-node toy network:
+## Run
 
 ```bash
-cd seed_network_v2/toy
-Rscript tutorial_toy.R
+cd seed_network_v3
+Rscript code/05_run_all.R
 ```
 
-The tutorial prints intermediate objects at every step (mixing matrix, node metrics, per-season YL, …) and writes PDFs to `tutorial_outputs/`. Read the console output alongside the PDFs to confirm the model behaves as expected before committing real-data runs.
+Outputs: `fig1_networks.pdf`, `fig2_transmission.pdf`,
+`fig3_trajectories.pdf`, `fig4_audpc_by_type.pdf`,
+`fig5_audpc_by_region.pdf`, `fig6_audpc_by_region_type.pdf`, and
+`figures_editable.pptx` (6 slides).
 
-### Option B — Real data on laptop
+## Packages
 
-```bash
-cd seed_network_v2/real
-Rscript pipeline_real.R
-```
+`igraph`, `ggplot2` (**≥ 3.4** — the figures use the `linewidth` aesthetic),
+`dplyr`, `readxl`, `patchwork`, `officer`, `rvg`, and **`seedHealth`**.
 
-This loads either the Objective 1 `.rds` networks (when available) or the Peru Excel data as a placeholder. Toggle `USE_OBJECTIVE1_NETWORKS` at the top of the script.
-
----
-
-## Required inputs
-
-### From Objective 1 (when available)
-
-Six igraph objects saved as `.rds` files in `real/networks/`:
-
-```
-real_nonstress.rds
-real_stress.rds
-scale_free_nonstress.rds
-scale_free_stress.rds
-small_world_nonstress.rds
-small_world_stress.rds
-```
-
-Each `.rds` must contain an `igraph` object with vertex attributes `name`, `type`, `region` (and optionally `location`) and edge attribute `weight`.
-
-### From the original Peru survey (current state)
-
-Two Excel files in `real/Data/`:
-
-```
-TieData_social_network.xlsx   (sheet: nonstress_ties [, stress_ties])
-NodeData_social_network.xlsx  (sheet: nonstress_nodes [, stress_nodes])
+```r
+install.packages(c("igraph","ggplot2","dplyr","readxl","patchwork","officer","rvg"))
+# seedHealth: install from your existing source as in v2
 ```
 
 ---
 
-## Configuration to set before a real run
+## What the figures show
 
-Edit the top of `pipeline_real.R`:
+**Figure 1** — 2×2. Left column: the two networks (row 1 nonstress, row 2
+stress). Right column: a summary-metrics table for each. Encoding: shape = node
+type, color = region, size = total degree, edge width = transaction volume.
+
+**Figure 2** — 6×4 composite. Columns = cycles 1, 4, 7, 10. Rows = the three
+seed-quality scenarios × {nonstress, stress} (nonstress on top of each pair).
+Same encoding as Figure 1, plus **node opacity = mean yield loss**, on a single
+shared scale across all 24 panels. Layout is fixed per network so nodes stay in
+place across cycles.
+
+**Figure 3** — two panels (stress left, nonstress right). Mean network yield
+loss per cycle for each seed scenario, with a 5–95% band, and **mean AUDPC**
+printed per scenario.
+
+**Figure 4** — AUDPC trajectories by **node type**. Same form as Figure 3
+(columns = the two networks, color = seed scenario, 5–95% band, per-panel
+AUDPC), with one row per node type.
+
+**Figure 5** — AUDPC trajectories by **region**. One row per region.
+
+**Figure 6** — AUDPC trajectories by **region × node type**. One row per
+region/type combination that actually occurs in the data (empty combinations
+are dropped). This figure is tall; its height scales with the number of
+combinations, and the PowerPoint slide for it is auto-fit (resize as needed).
+
+### Node legibility
+
+Networks are laid out with a repulsion-based algorithm (`graphopt`) and the
+coordinates are normalized to a fixed square, with capped node sizes, so the
+structure is readable without overlap. Change the algorithm via `LAYOUT_ALGO`
+in `05_run_all.R` (`"graphopt"`, `"fr"`, `"kk"`, `"drl"`, `"nicely"`) and the
+seed via `LAYOUT_SEED`.
+
+## Modeling choices (as agreed)
+
+- Three scenarios set the **base** `pHS_0`: Informal 0.70, QDS-moderate 0.80,
+  QDS-optimistic 0.90.
+- Each node's start = base **± a region × node-type nudge**: Low −0.05,
+  Medium 0, High +0.05 (clamped to [0,1]). The size of the nudge is the single
+  constant `PHS_REGION_ADJ` in `02_params.R` — change it there if "5 units"
+  meant something other than 0.05.
+- **Wa → `wxtnormm`**, **Z → `zxtnormm`**, both Low/Med/High → 0.2/0.5/0.8,
+  SD = 0.10. The same tables apply to both networks.
+- No distribution strategy / intervention — these are pure baseline
+  degeneration runs.
+- All other `onesim` parameters are the v2 `base_params` values.
+
+## Knobs (top of `05_run_all.R`)
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `NSIM` | Stochastic replicates per scenario | 100 |
-| `NSEASONS` | Seasons to simulate | 10 |
-| `K_NODES_FRACTION` | Proportion of nodes targeted per season | 0.10 |
-| `RING_SIZE` | Number of epicenters for close-ring strategy | 5 |
-| `ACCESSIBLE_REGIONS` | Regions reachable by convenience strategy | `c("Junin", "Lima")` |
-| `USE_OBJECTIVE1_NETWORKS` | Toggle for input source | `FALSE` |
+| `NSIM` | replicates per scenario | 100 |
+| `NSEASONS` | cycles | 10 |
+| `CYCLES` | cycles drawn in Fig 2 | 1, 4, 7, 10 |
+| `LAYOUT_ALGO` | network layout algorithm | "graphopt" |
+| `LAYOUT_SEED` | network layout reproducibility | 42 |
+| `RNG_SEED` | simulation reproducibility | 2024 |
+
+Palettes (`REGION_COLORS`, `TYPE_SHAPES`, `SCEN_COLORS`) and `DRAW_ARROWS` are
+near the top of `04_figures.R`. Everything is also editable in the `.pptx`.
 
 ---
 
-## Expected outputs (real run)
+## A few notes (this was not run before delivery)
 
-```
-real_outputs/
-├── obj2_results.rds            18-scenario simulation data
-├── obj3_results.rds            24-scenario simulation data
-├── obj4_results.rds            100-scenario simulation data
-├── realistic_scenarios.csv     The 3 worst-case scenarios
-├── best_strategies.rds         The 4 winning (network × seed × strategy) tuples
-├── fig_obj2_heatmap.pdf        Baseline yield loss across 18 scenarios
-├── fig_obj3_heatmap.pdf        Strategy comparison across 24 scenarios
-└── fig_obj4_heatmap.pdf        Risk-factor sensitivity across 100 scenarios
-```
+I couldn't execute R in the environment where this was written, so treat the
+first local run as the real test. Things most worth a glance:
 
----
-
-## After approval — HiPerGator deployment
-
-Once you confirm the output of `pipeline_real.R` looks right, the same modules can be wrapped in SLURM array scripts for HiPerGator (one array task per scenario, with `mclapply` parallelism within each task). I'll generate those scripts as a separate step.
+1. **`seedHealth::onesim` output fields.** `run_node` reads `res$outfin$pHS`
+   and `res$outfin$YL` exactly as v2 did — confirm those names still hold.
+2. **PowerPoint template names.** `save_pptx` uses `layout = "Blank"`,
+   `master = "Office Theme"` (officer's default template). If your default
+   template differs, run `officer::layout_summary(officer::read_pptx())` and
+   adjust.
+3. **`cairo_pdf`.** If your R build lacks cairo, switch the `device` in
+   `save_pdf` to `"pdf"`.
+4. **Region/type spelling.** Regions must match the seven in
+   `CATEGORY_MATRIX` (Huancavelica, Pasco, Junin, Huanuco, Apurimac, Ayacucho,
+   Lima) and types the eight in `TYPES_ORDER`; anything else defaults to
+   "Medium" / "Other" with a warning. Watch the console on the first run.
+5. **Figure 2 size.** It's intentionally large (14×18 in). The PPTX slide for
+   it may need resizing once opened — the content is fully editable vector.

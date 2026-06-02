@@ -1,33 +1,84 @@
 # =============================================================================
-# 02_params.R
-# Parameters for the seed degeneration network model
+# 02_params.R  (pipeline v3)
+# Seed-degeneration parameters.
 #
-# Design principle:
-#   Seed-quality categories (CS / QDS / IS) differ ONLY in pHSinit.
-#   Biological / management / environmental parameters are otherwise
-#   IDENTICAL across seed types, but vary spatially as follows:
-#
-#       pHSinit  varies by node TYPE   (via node_type_pHSinit)
-#       W        varies by node REGION (wxtnormm / wxtnormsd via region_W)
-#       Z        varies by node REGION (zxtnormm / zxtnormsd via region_Z)
-#
-#   Each node's effective parameter list is assembled by build_node_params()
-#   below; this is what simulate_network() now consumes.
-#
+# Design (per agreed spec):
+#   * Three SEED-QUALITY scenarios differ only in the BASE mean pHS_0:
+#         Informal           = 0.70
+#         QDS (moderate)     = 0.80
+#         QDS (optimistic)   = 0.90
+#   * Each node's starting pHS_0 = scenario base + a region x node-type nudge:
+#         Low -> -0.05 , Medium -> 0 , High -> +0.05   (clamped to [0,1])
+#   * Wa (environment, -> wxtnormm) and Z (selection, -> zxtnormm) vary by the
+#     SAME region x node-type category, mapped Low/Medium/High -> 0.2/0.5/0.8,
+#     with a single SD of 0.10.
+#   * The SAME tables are applied to BOTH the nonstress and stress networks;
+#     the only structural difference between them is the network itself.
+#   * All other onesim parameters (betax, Kx, r, g, c, E, theta, ...) are
+#     identical across nodes and scenarios (see base_params).
+# =============================================================================
 
+# ── One number you may want to change ────────────────────────────────────────
+# Interpretation of "5 units" in the pHS_0 nudge, on the 0-1 pHS scale.
+PHS_REGION_ADJ <- 0.05
 
-# ── Shared parameters (applied to every node by default) ─────────────────────
-# Values listed for wxtnormm / wxtnormsd and zxtnormm / zxtnormsd are only
-# fallbacks; build_node_params() overrides them from region_W and region_Z.
+# ── Level -> numeric maps ─────────────────────────────────────────────────────
+WZ_LEVELS  <- c(Low = 0.2, Medium = 0.5, High = 0.8)          # Wa and Z means
+WZ_SD      <- 0.10                                            # single SD
+PHS_ADJUST <- c(Low = -1, Medium = 0, High = 1) * PHS_REGION_ADJ
+
+# ── Seed-quality scenarios (base mean pHS_0) ─────────────────────────────────
+seed_scenarios <- data.frame(
+  scenario = c("Informal (0.7)", "QDS moderate (0.8)", "QDS optimistic (0.9)"),
+  pHS0     = c(0.70,             0.80,                 0.90),
+  stringsAsFactors = FALSE
+)
+
+# ── Region x node-type category matrix ───────────────────────────────────────
+# The pattern is identical for Wa, Z, and the pHS_0 nudge (as confirmed).
+# Rows = region, columns = node type. Values in {Low, Medium, High}.
+TYPES_ORDER <- c("Seed_specialist", "Farmer", "Custodian", "Other",
+                 "Farm_assoc", "Government", "Trader", "NGO")
+
+.pat_low <- rep("Low", 8)
+.pat_A   <- c("Low", "Medium", "Low", "Medium", "Medium", "Low", "Medium", "Medium")
+.pat_B   <- c("Low", "High",   "Low", "High",   "Medium", "Low", "High",   "Medium")
+
+CATEGORY_MATRIX <- rbind(
+  Huancavelica = .pat_low,
+  Pasco        = .pat_low,
+  Junin        = .pat_A,
+  Huanuco      = .pat_B,
+  Apurimac     = .pat_low,
+  Ayacucho     = .pat_A,
+  Lima         = .pat_B
+)
+colnames(CATEGORY_MATRIX) <- TYPES_ORDER
+
+# ── Category lookup with safe default ────────────────────────────────────────
+# Unknown region/type -> "Medium" (neutral) with a one-time-ish warning.
+lookup_category <- function(region, type) {
+  if (is.na(region) || is.na(type) ||
+      !(region %in% rownames(CATEGORY_MATRIX)) ||
+      !(type   %in% colnames(CATEGORY_MATRIX))) {
+    warning(sprintf("No category for region='%s' / type='%s' -> defaulting to 'Medium'.",
+                    region, type), call. = FALSE)
+    return("Medium")
+  }
+  CATEGORY_MATRIX[region, type]
+}
+
+# ── Shared (node-invariant) onesim parameters ────────────────────────────────
+# wxtnormm / zxtnormm here are placeholders; build_node_params() overrides them.
 base_params <- list(
   Kx        = 100,
   betax     = 0.02,
-  wxtnormm  = 0.5,    wxtnormsd = 0.10,   # default W (overridden by region_W)
+  wxtnormm  = 0.5,    wxtnormsd = WZ_SD,    # overridden per node (Wa table)
   hx        = 1,
-  mxtnormm  = 1.0,    mxtnormsd = 0.10,   # no vector management
-  axtnormm  = 1.0,    axtnormsd = 0.10,   # no roguing (uniform across regions)
-  rx        = 0.05,                       # low reversion
-  zxtnormm  = 1.0,    zxtnormsd = 0.10,   # default Z (overridden by region_Z)
+  mxtnormm  = 1.0,    mxtnormsd = 0.10,     # no vector management
+  axtnormm  = 1.0,    axtnormsd = 0.10,     # no roguing
+  rx        = 0.05,                          # low reversion
+  zxtnormm  = 0.5,    zxtnormsd = WZ_SD,    # overridden per node (Z table)
   gx        = 4,
   cx        = 0.9,
   phix      = 0,
@@ -37,94 +88,36 @@ base_params <- list(
   Ex        = 0.05
 )
 
-# ── Seed-type-specific pHSinit (intervention seed quality) ───────────────────
-seed_pHSinit <- c(
-  certified = 0.97,
-  qds       = 0.80,
-  informal  = 0.40
-)
+# ── Per-node parameter list (W and Z by region x type) ───────────────────────
+# Returns a list of length vcount(g), named and ordered by V(g)$name.
+build_node_params <- function(g, base_params = get("base_params")) {
+  node_names <- igraph::V(g)$name
+  regions    <- igraph::V(g)$region
+  types      <- igraph::V(g)$type
 
-# ── Node-type-specific baseline pHSinit (Objective 2) ────────────────────────
-node_type_pHSinit <- c(
-  Seed_specialist = 0.80,
-  Government      = 0.75,
-  NGO             = 0.70,
-  Farm_assoc      = 0.60,
-  Custodian       = 0.55,
-  Farmer          = 0.40,
-  Trader          = 0.35,
-  Other           = 0.30
-)
-
-# ── Region-specific W (weather conduciveness to disease) ─────────────────────
-# Higher mean = environment more favorable to disease (faster spread).
-# Default values reflect a hypothetical Andean potato gradient; edit to
-# match your study area when running on real data.
-region_W <- list(
-  Junin        = list(mean = 0.50, sd = 0.10),
-  Pasco        = list(mean = 0.60, sd = 0.10),
-  Huancavelica = list(mean = 0.70, sd = 0.15),
-  Lima         = list(mean = 0.40, sd = 0.10)
-)
-
-# ── Region-specific Z (positive selection / farmer-level management) ─────────
-# In seedHealth, zxtnormm closer to 0 = stronger selection toward healthy
-# seed (better management). Closer to 1 = essentially random selection.
-region_Z <- list(
-  Junin        = list(mean = 1.00, sd = 0.10),
-  Pasco        = list(mean = 0.95, sd = 0.10),
-  Huancavelica = list(mean = 0.90, sd = 0.15),
-  Lima         = list(mean = 1.00, sd = 0.10)
-)
-
-# ── Defaults for any region not found in the tables above ────────────────────
-default_region_W <- list(mean = 0.50, sd = 0.10)
-default_region_Z <- list(mean = 1.00, sd = 0.10)
-
-# ── Build node-indexed pHSinit vector ────────────────────────────────────────
-init_pHS_by_node_type <- function(g, default = 0.40) {
-  v <- node_type_pHSinit[V(g)$type]
-  v[is.na(v)] <- default
-  names(v)    <- V(g)$name
-  v
-}
-
-# ── Build a per-node list of parameter lists ─────────────────────────────────
-# Returns a list of length vcount(g), named by V(g)$name and in V(g)$name
-# order. Each element is a copy of base_params with W and Z overridden
-# according to the node's region. Pass this to simulate_network().
-#
-# To add another region-varying parameter (e.g. roguing axtnormm):
-#   1. Define a region_A table with the same {mean, sd} structure.
-#   2. Add a `default_region_A`.
-#   3. Inside the lapply below, add:
-#        Ap <- if (!is.null(A_table[[r]])) A_table[[r]] else default_A
-#        p$axtnormm  <- Ap$mean
-#        p$axtnormsd <- Ap$sd
-build_node_params <- function(g, base_params,
-                              W_table   = region_W,
-                              Z_table   = region_Z,
-                              default_W = default_region_W,
-                              default_Z = default_region_Z) {
-  
-  node_names <- V(g)$name
-  regions    <- V(g)$region
-  
-  if (length(regions) != length(node_names) || any(is.na(regions)))
-    stop("V(g)$region is missing or has NAs — cannot assign per-region params.")
-  
   per_node <- lapply(seq_along(node_names), function(i) {
-    r  <- regions[i]
-    Wp <- if (!is.null(W_table[[r]])) W_table[[r]] else default_W
-    Zp <- if (!is.null(Z_table[[r]])) Z_table[[r]] else default_Z
-    
+    cat_i <- lookup_category(regions[i], types[i])
     p <- base_params
-    p$wxtnormm  <- Wp$mean
-    p$wxtnormsd <- Wp$sd
-    p$zxtnormm  <- Zp$mean
-    p$zxtnormsd <- Zp$sd
+    p$wxtnormm  <- unname(WZ_LEVELS[cat_i]);  p$wxtnormsd <- WZ_SD
+    p$zxtnormm  <- unname(WZ_LEVELS[cat_i]);  p$zxtnormsd <- WZ_SD
     p
   })
   names(per_node) <- node_names
   per_node
+}
+
+# ── Per-node starting pHS_0 vector for a given scenario base ─────────────────
+# pHS_0[node] = scenario_pHS0 + adjustment(category(region,type)), clamped.
+build_pHSinit <- function(g, scenario_pHS0) {
+  node_names <- igraph::V(g)$name
+  regions    <- igraph::V(g)$region
+  types      <- igraph::V(g)$type
+
+  v <- vapply(seq_along(node_names), function(i) {
+    cat_i <- lookup_category(regions[i], types[i])
+    val   <- scenario_pHS0 + unname(PHS_ADJUST[cat_i])
+    min(max(val, 0), 1)
+  }, numeric(1))
+  names(v) <- node_names
+  v
 }
