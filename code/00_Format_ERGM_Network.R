@@ -29,12 +29,14 @@ library(igraph)
 # Reuse add_node_metrics() + KNOWN_TYPES from the example builder.
 source(file.path("code", "01_network.R"))
 
+
+ 
 # ── CONFIG ───────────────────────────────────────────────────────────────────
 DATA_DIR <- "Data"
 # Point at the large nets for the real run; small nets for a dry test.
 NET_FILES <- list(
-  Nonstress = file.path(DATA_DIR, "small_net_nonstress.RDS"),
-  Stress    = file.path(DATA_DIR, "small_net_stress.RDS")
+  Nonstress = file.path(DATA_DIR, "large_net_nonstress.RDS"),
+  Stress    = file.path(DATA_DIR, "large_net_stress.RDS")
 )
 OUT_FILE     <- file.path(DATA_DIR, "networks_real.rds")
 LOCATION_FILL <- "Unknown"   # no location in this schema; placeholder value
