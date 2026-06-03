@@ -55,6 +55,27 @@ CATEGORY_MATRIX <- rbind(
 )
 colnames(CATEGORY_MATRIX) <- TYPES_ORDER
 
+# Plex's networks collapse Government and NGO into one institutional
+# type, "Public". Give it ONE Low/Medium/High rating per region; this drives the
+# Wa / Z means and the pHS_0 nudge exactly as for every other type.
+#
+# PLACEHOLDER below mirrors the old "Government" column (Low in every region).
+# Replace with the CIP-provided ratings for "Public" when they arrive.
+PUBLIC_BY_REGION <- c(
+  Huancavelica = "Low",
+  Pasco        = "Low",
+  Junin        = "Medium",
+  Huanuco      = "Medium",
+  Apurimac     = "Low",
+  Ayacucho     = "Medium",
+  Lima         = "Medium"
+)
+stopifnot(setequal(names(PUBLIC_BY_REGION), rownames(CATEGORY_MATRIX)))
+CATEGORY_MATRIX <- cbind(CATEGORY_MATRIX,
+                         Public = PUBLIC_BY_REGION[rownames(CATEGORY_MATRIX)])
+TYPES_ORDER <- c(TYPES_ORDER, "Public")
+
+
 # ── Category lookup with safe default ────────────────────────────────────────
 # Unknown region/type -> "Medium" (neutral) with a one-time-ish warning.
 lookup_category <- function(region, type) {

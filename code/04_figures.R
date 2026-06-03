@@ -35,7 +35,8 @@ REGION_COLORS <- c(
 # 8 distinguishable plotting characters; color shows on all of them.
 TYPE_SHAPES <- c(
   Seed_specialist = 15, Farmer = 16, Custodian = 17, Other = 18,
-  Farm_assoc      = 3,  Government = 4, Trader = 8, NGO = 13
+  Farm_assoc      = 3,  Government = 4, Trader = 8, NGO = 13,
+  Public          = 10
 )
 
 SCEN_COLORS <- c(

@@ -33,12 +33,7 @@ set.seed(RNG_SEED)
 
 # ── 1. Build networks ─────────────────────────────────────────────────────────
 cat("\n== Building networks ==\n")
-networks <- build_both_networks(TIES_FILE, NODES_FILE)
-for (nm in names(networks)) {
-  g <- networks[[nm]]
-  cat(sprintf("  %-10s nodes=%d edges=%d components=%d\n",
-              nm, vcount(g), ecount(g), components(g, mode = "weak")$no))
-}
+networks <- readRDS("./Data/networks_real.rds")
 
 # Fixed layouts + edge frames (reused by Figures 1 and 2)
 layouts     <- lapply(networks, make_layout, algo = LAYOUT_ALGO, seed = LAYOUT_SEED)
@@ -75,8 +70,8 @@ save_pptx(
     list(plot = fig2, width = 11.0, height = 14.0),
     list(plot = fig3, width = 11.0, height = 5.0),
     list(plot = fig4, width = d4["width"], height = d4["height"]),
-    list(plot = fig5, width = d5["width"], height = d5["height"]),
-    list(plot = fig6, width = d6["width"], height = d6["height"])
+    list(plot = fig5, width = d5["width"], height = d5["height"])
+#    list(plot = fig6, width = d6["width"], height = d6["height"])
   ),
   path = file.path(OUTPUT_DIR, "figures_editable.pptx")
 )
